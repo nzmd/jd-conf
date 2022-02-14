@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## Build 20220105-001-test
+## Build 20220116-001-test
 
 ## 导入通用变量与函数
 #dir_shell=/ql/shell
@@ -23,7 +23,7 @@ repo4='shufflewzc_faker2'                          #预设的 shufflewzc 仓库
 repo5='Wenmoux_scripts_wen_chinnkarahoi'           #预设的 Wenmoux 仓库，用于读取口袋书店互助码。需提前拉取温某人的仓库或口袋书店脚本并完整运行。
 repo6='Aaron-lv_sync_jd_scripts'                   #预设的 Aaron-lv 仓库
 repo7='smiek2221_scripts'                          #预设的 smiek2221 仓库
-repo=$repo4                                            #空值，表示遍历所有仓库脚本日志
+repo=""                                            #空值，表示遍历所有仓库脚本日志
 
 ## 调试模式开关，默认是0，表示关闭；设置为1，表示开启
 DEBUG="1"
@@ -45,7 +45,7 @@ CLEANBAK_DAYS="2"
 ## 填 2 使用“随机顺序互助模板”，本套脚本内账号间随机顺序助力，每次生成的顺序都不一致。
 ## 填 3 使用“车头A模式互助模板”，本套脚本内指定前 N 个账号优先助力，N 个以后账号间随机助力(随机部分账号顺序随机)。
 ## 填 4 使用“车头B模式互助模板”，本套脚本内指定前 N 个账号优先助力，N 个以后账号间随机助力(随机部分账号顺序固定)。
-HelpType="1"
+HelpType=""
 
 ## 定义前 N 个账号优先助力，N 个以后账号间随机助力。front_num="N"，N 定义值小于账号总数，当HelpType 赋值 3 或 4 时有效
 front_num="5"
@@ -87,11 +87,6 @@ BreakHelpNum="4 9-14 15~18 19_21"  ## 屏蔽账号序号或序号区间
 ## 定义是否自动更新配置文件中的互助码和互助规则
 ## 默认为 UpdateType="1" 表示更新互助码和互助规则；UpdateType="2" 表示只更新互助码，不更新互助规则；UpdateType="3" 表示只更新互助规则，不更新互助码；留空或其他数值表示不更新。
 UpdateType="1"
-
-## 定义是否自动安装或修复缺失的依赖，默认为1，表示自动修复；留空或其他数值表示不修复。
-FixDependType=""
-## 定义监控修复的依赖名称
-package_name="canvas png-js date-fns axios crypto-js ts-md5 tslib @types/node dotenv got md5 requests typescript fs require jsdom download js-base64 tough-cookie tunnel ws jieba prettytable form-data json5 global-agent"
 
 ## 需组合的环境变量列表，env_name需要和var_name一一对应，如何有新活动按照格式添加(不懂勿动)
 env_name=(
@@ -197,20 +192,20 @@ name_chinese=(
 # 定义 json 数据查询工具
 def_envs_tool(){
     for i in $@; do
-        curl -s --noproxy "*" "http://0.0.0.0:5600/api/envs?searchValue=$i" -H "Authorization: Bearer $token"
+        curl -s --noproxy "*" "http://0.0.0.0:5600/api/envs?searchValue=$i" -H "Authorization: Bearer $token" | jq .data | perl -pe "{s|^\[\|\]$||g; s|\n||g; s|\},$|\}\n|g}"
     done
 }
 
 def_json_total(){
-    def_envs_tool $1 | grep -Eo "\{\"value[^\}]+[^\}]+\}" | jq -r .$2
+    def_envs_tool $1 | jq -r .$2
 }
 
 def_json(){
-    def_envs_tool $1 | grep -Eo "\{\"value[^\}]+[^\}]+\}" | grep "$3" | jq -r .$2
+    def_envs_tool $1 | grep "$3" | jq -r .$2
 }
 
 def_json_value(){
-    cat "$1" | perl -pe "{s|\n||g; s|\},|\}\n|g}" | grep -Eo "\{[^\}]+}" | grep "$3" | jq -r .$2
+    cat "$1" | perl -pe "{s|^\[\|\]$||g; s|\n||g; s|\},$|\}\n|g}" | grep "$3" | jq -r .$2
 }
 
 def_sub(){
@@ -709,137 +704,12 @@ if [[ $CLEANBAK = "1" ]]; then
 fi
 }
 
-#检查 node 依赖状态并修复
-install_node_dependencies_all(){
-    node_dependencies_ori_status(){
-        if [[ -n $(echo $(cnpm ls $1) | grep ERR) ]]; then
-            return 1
-        elif [[ -n $(echo $(cnpm ls $1 -g) | grep ERR) ]]; then
-            return 2
-        elif [[ $(cnpm ls $1) =~ $1 ]]; then
-            return 3
-        elif [[ $(cnpm ls $1 -g) =~ $1 ]]; then
-            return 4
-        fi
-    }
-
-    test(){
-        for i in $@; do
-            node_dependencies_ori_status
-            echo -e "$i : $?"
-        done
-    }
-
-    install_node_dependencie(){
-#        node_dependencies_ori_status $1
-#        if [[ $? = 1 || $? = 2 ]]; then
-#            cnpm uninstall $1
-#        elif [[ $? = 3 ]]; then
-#            cnpm uninstall $1 -g
-#        fi
-#
-#        node_dependencies_ori_status $1
-#        if [[ $? = 4 ]]; then
-#            if [[ $1 = "canvas" ]]; then
-#                apk add --no-cache build-base g++ cairo-dev pango-dev giflib-dev && cnpm install $1 -g
-#            else
-#                cnpm install $1 -g --force
-#            fi
-#        fi
-
-        node_dependencies_ori_status $1
-        if [[ $? = 1 ]]; then
-            [[ $1 = "canvas" ]] && { cnpm uninstall $1; rm -rf /ql/scripts/node_modules/canvas; rm -rf /usr/local/lib/node_modules/lodash/canvas; } || cnpm uninstall $1
-        elif [ $? = 2 ]; then
-            [[ $1 = "canvas" ]] && { cnpm uninstall $1 -g; rm -rf /usr/local/lib/node_modules/canvas; } || cnpm uninstall $1 -g
-        fi
-
-        node_dependencies_ori_status $1
-        if [[ $? != 3 && $? != 4 ]]; then
-            [[ $1 = "canvas" ]] && { apk add --no-cache build-base g++ cairo-dev pango-dev giflib-dev; cnpm install $1 -g --force; } || cnpm install $1 -g --force
-        fi
-    }
-
-    uninstall_dependencies(){
-        for i in $package_name; do
-            cnpm uninstall $i
-            cnpm uninstall i $i
-            cnpm uninstall $i -g
-            cnpm uninstall i $i -g
-        done
-    }
-
-    check_node_dependencies_setup_status(){
-        for i in $package_name; do
-            cnpm ls $i -g
-        done
-    }
-
-    [[ ! $(npm get registry | grep "taobao.org") ]] && npm config set registry http://registry.npm.taobao.org
-    npm install -g cnpm
-    [[ $(npm ls cnpm -g) =~ (empty) ]] && npm install cnpm -g
-    for i in $package_name; do
-        install_node_dependencie $i
-    done
-    #cnpm update --force
-    #cnpm i --legacy-peer-deps
-    #cnpm i --package-lock-only
-    #cnpm audit fix
-    #cnpm audit fix --force
-}
-
 kill_proc(){
     ps -ef|grep "$1"|grep -Ev "$2"|awk '{print $1}'|xargs kill -9
 }
 
-batch_deps_scripts(){
-    switch_status=(
-      on
-      on
-      on
-    )
-    
-    scripts_name=(
-      ql.js
-      sendNotify.js
-      JD_DailyBonus.js
-    )
-    
-    test_connect(){
-        curl -o /dev/null -s -w %{http_code} $1
-    }
-
-    get_remote_filesize(){
-        curl -sI $1 | grep -i Content-Length | awk '{print $2}'
-    }
-
-    get_local_filesize(){
-       stat -c %s $1
-    }
-    
-    scripts_source=(
-      https://raw.fastgit.org/ccwav/QLScript2/main/ql.js
-      https://raw.fastgit.org/ccwav/QLScript2/main/sendNotify.js
-      https://raw.fastgit.org/NobyDa/Script/master/JD-DailyBonus/JD_DailyBonus.js
-    )
-    
-    download_scripts(){
-        if [[ "$(test_connect $1)" -eq "200" ]]; then
-           curl -C - -s --connect-timeout 5 --retry 3 --noproxy "*" $1 -o $dir_config/tmp_$2
-           [[ $(get_remote_filesize $1) -eq $(get_local_filesize $dir_config/tmp_$2 ) ]] && mv -f $dir_config/tmp_$2 $dir_config/$2 || rm -rf $dir_config/tmp_$2
-           #curl -C - -s --connect-timeout 5 --retry 3 --noproxy "*" $1 -o $dir_config/$2
-        fi
-    }
-    
-    for ((i = 0; i < ${#scripts_source[*]}; i++)); do
-        { if [[ ${switch_status[i]} = "on" ]]; then download_scripts ${scripts_source[i]} ${scripts_name[i]}; fi } &
-    done
-}
-
 ## 执行并写入日志
 kill_proc "code.sh" "grep|$$" >/dev/null 2>&1
-batch_deps_scripts &
-[[ $FixDependType = "1" ]] && [[ "$ps_num" -le $proc_num ]] && install_node_dependencies_all >/dev/null 2>&1 &
 latest_log=$(ls -r $dir_code | head -1)
 latest_log_path="$dir_code/$latest_log"
 ps_num="$(ps | grep code.sh | grep -v grep | wc -l)"
